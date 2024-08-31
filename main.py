@@ -1,13 +1,57 @@
 import sys
 import random
-import math
+import numpy as np
 from PySide6.QtCore import Qt, QTimer, QPointF, QLineF, QPropertyAnimation, QEasingCurve
 from PySide6.QtGui import QBrush, QColor, QPainter, QPixmap, QPen, QPainterPath, QFont
 from PySide6.QtWidgets import QApplication, QGraphicsEllipseItem, QGraphicsScene, QGraphicsView, QGraphicsPixmapItem, QGraphicsObject, QGraphicsTextItem, QGraphicsDropShadowEffect
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PySide6.QtCore import QUrl
 
-class FireworkParticle(QGraphicsEllipseItem):
+class FireworkParticleHeart(QGraphicsEllipseItem):
+    def __init__(self, root_pos, deviation, angle, color):
+        super().__init__(-2, -2, 4, 4)
+        self.setBrush(QBrush(color))
+        self.root_pos = root_pos
+        self.setPos(root_pos - deviation)
+        self.setOpacity(1.0)
+
+        self.timer = 0
+        self.angle = angle
+        self.speed = random.uniform(1, 1.5)
+        self.v_speed = 50
+
+        self.d_x = 16 * np.sin(self.angle)**3
+        self.d_y = 13 * np.cos(self.angle) - 5 * np.cos(2*self.angle) - 2 * np.cos(3*self.angle) - np.cos(4*self.angle)
+        self.a_velocity = QPointF(self.speed * self.d_x, self.speed * self.d_y)
+        self.v_velocity = QPointF(0, self.v_speed)
+
+    def advance(self, phase):
+        if phase == 0:
+            return
+
+        # Move the particle
+        if self.timer < 5:
+            line = QLineF(self.root_pos, self.pos())
+            distance = line.length() / 5
+
+            self.v_velocity -= QPointF(0, distance)
+            self.setPos(self.pos() - self.v_velocity)
+            self.current_pos = QPointF(self.x(), self.y())
+            self.before_explos_pos = self.current_pos
+            self.timer += 1
+        else:
+            line = QLineF(self.before_explos_pos, self.current_pos)
+            distance = line.length() / 100
+            self.a_velocity += QPointF(distance * self.d_x, distance * self.d_y)
+            self.setPos(self.pos() - self.a_velocity)
+            self.current_pos = QPointF(self.x(), self.y())
+
+            # Fade out
+            self.setOpacity(self.opacity() - 0.15)
+            if self.opacity() <= 0:
+                self.scene().removeItem(self)
+
+class FireworkParticleRound(QGraphicsEllipseItem):
     def __init__(self, root_pos, deviation, angle, color):
         super().__init__(-2, -2, 4, 4)
         self.setBrush(QBrush(color))
@@ -20,7 +64,7 @@ class FireworkParticle(QGraphicsEllipseItem):
         self.speed = random.uniform(1, 6)
         self.v_speed = 50
 
-        self.a_velocity = QPointF(self.speed * math.cos(angle), self.speed * math.sin(angle))
+        self.a_velocity = QPointF(self.speed * np.cos(angle), self.speed * np.sin(angle))
         self.v_velocity = QPointF(0, self.v_speed)
 
     def advance(self, phase):
@@ -40,7 +84,7 @@ class FireworkParticle(QGraphicsEllipseItem):
         else:
             line = QLineF(self.before_explos_pos, self.current_pos)
             distance = line.length() / 30
-            self.a_velocity += QPointF(distance * math.cos(self.angle), distance * math.sin(self.angle))
+            self.a_velocity += QPointF(distance * np.cos(self.angle), distance * np.sin(self.angle))
             self.setPos(self.pos() + self.a_velocity)
             self.current_pos = QPointF(self.x(), self.y())
 
@@ -124,6 +168,7 @@ class Firework(QGraphicsView):
         self.timer = QTimer()
         self.timer.timeout.connect(self.launch_firework)
         self.timer.start(200)  # Launch a firework every second
+        self.counter = 0
         self.add_congratulatory_text()
 
     def add_congratulatory_text(self):
@@ -160,17 +205,30 @@ class Firework(QGraphicsView):
         y = random.uniform(200, self.scene.height())
         color = QColor(random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
 
-        for i in range(1, 200):  # Number of particles
-            deviation_x = random.uniform(-1, 1)
-            deviation_y = random.uniform(-50, 0)
-            angle = i * 2 * math.pi / 50
-            particle = FireworkParticle(QPointF(x, y),
-                                        QPointF(deviation_x, deviation_y),
-                                        angle, color)
-            self.scene.addItem(particle)
+        if self.counter <= 2:
+            for i in range(1, 200):  # Number of particles
+                deviation_x = random.uniform(-1, 1)
+                deviation_y = random.uniform(-50, 0)
+                angle = i * 2 * np.pi / 50
+                particle = FireworkParticleRound(QPointF(x, y),
+                                            QPointF(deviation_x, deviation_y),
+                                            angle, color)
+                self.scene.addItem(particle)
+        elif 2 < self.counter <= 4:
+            for i in range(1, 200):  # Number of particles
+                deviation_x = random.uniform(-1, 1)
+                deviation_y = random.uniform(-50, 0)
+                angle = i * 2 * np.pi / 50
+                particle = FireworkParticleHeart(QPointF(x, y),
+                                            QPointF(deviation_x, deviation_y),
+                                            angle, color)
+                self.scene.addItem(particle)
+        else:
+            self.counter = 0
 
         # Start the animation
         self.scene.advance()
+        self.counter += 1
 
 
 if __name__ == "__main__":
